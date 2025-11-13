@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ΔE — Promedio de limpia vs recortes circulares/rectangulares de sucia (idénticas ⇒ ΔE 0.0)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root{--bg:#0b1220;--card:#0f172a;--muted:#94a3b8;--text:#e5e7eb;--accent:#22d3ee;--danger:#ef4444;--ok:#22c55e;}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  h1{margin:16px auto 6px; padding:0 16px; max-width:1200px; font-size:1.35rem}
+  p.lead{margin:0 auto 14px; padding:0 16px; max-width:1200px; color:var(--muted)}
+  .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;max-width:1200px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.4);min-width:0}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  label.btn,input[type=file]{cursor:pointer}
+  input[type=file]{display:none}
+  .btn{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0b1220;color:var(--text)}
+  .btn.primary{border-color:var(--accent)}
+  .btn.ok{border-color:var(--ok)}
+  .btn.danger{border-color:var(--danger)}
+  .hint{color:var(--muted);font-size:.92rem}
+  .title{font-weight:700;margin:4px 0 10px}
+  .badge{padding:2px 6px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:#0b1220;color:#cbd5e1;font-size:.85rem}
+  .canvas-wrap{position:relative;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden;background:#061020}
+  canvas#view{display:block;width:100%;height:58vh;max-height:60vh;cursor:crosshair}
+  .thumbs-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+  .thumbs-card{background:#0a1324;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px}
+  .thumbs-card h4{margin:0 0 6px;font-size:.95rem;color:#cbd5e1}
+  .thumbs{display:flex;flex-wrap:wrap;gap:6px}
+  .thumb{width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.15);cursor:pointer;position:relative;background:#000}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .idx{position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,.5);padding:0 5px;border-radius:6px;font-size:.75rem;color:#e5e7eb}
+  .thumb .kind{position:absolute;top:2px;left:4px;background:rgba(0,0,0,.5);padding:0 5px;border-radius:6px;font-size:.7rem;color:#e5e7eb}
+
+  .results-wrap{max-width:100%; overflow:auto}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.95rem; table-layout:fixed}
+  th,td{padding:8px 10px;border-bottom:1px dashed rgba(255,255,255,.08);text-align:left;vertical-align:top; word-wrap:break-word}
+  th{color:var(--muted)}
+  a[download]{text-decoration:none}
+  pre#csvOut{background:#0a1324;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;white-space:pre;overflow:auto;max-height:220px}
+
+  #chartBox{width:100%; height:300px; background:#061020; border-radius:12px; overflow:hidden; position:relative}
+  #chart{display:block; width:100%; height:100%}
+  #chartBox2{width:100%; height:260px; background:#061020; border-radius:12px; overflow:hidden; position:relative; margin-top:10px}
+  #chart2{display:block; width:100%; height:100%}
+
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:999999}
+  .modal.open{display:flex}
+  .modal img{max-width:92vw;max-height:92vh;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+
+  .root-colab-wrap { max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 1000px){
+    .wrap{grid-template-columns:1fr}
+    canvas#view{height:48vh}
+    #chartBox{height:260px}
+    #chartBox2{height:220px}
+  }
+
+  .radio-group{display:flex;gap:14px;align-items:center;padding:8px 10px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#0a1324}
+  .radio-group label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  .radio-group input[type="radio"]{accent-color:#22d3ee;cursor:pointer}
+</style>
+</head>
+<body>
+  <div class="root-colab-wrap">
+  <h1>ΔE — Promedio de <b>limpia</b> vs recortes <u>circulares o rectangulares</u> de <b>sucia</b> (idénticas ⇒ ΔE=0.0)</h1>
+  <p class="lead">1) Sube <b>limpia</b> y dibuja recortes. 2) Sube <b>sucia</b> (o clona la misma imagen) y repite. 3) Finaliza selecciones, calcula ΔE y descarga CSV.</p>
+
+  <div class="wrap">
+    <!-- Panel izquierdo -->
+    <div class="card">
+      <div class="title">1) Cargar imágenes y seleccionar</div>
+
+      <div class="row" style="margin-bottom:8px">
+        <label class="btn"><input id="fLimpia" type="file" accept="image/*">Subir limpia</label>
+        <button id="btnEditLimpia" class="btn primary">Editar LIMPIA</button>
+        <span id="countLimpia" class="badge">0 recortes</span>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <label class="btn"><input id="fSucia" type="file" accept="image/*">Subir sucia</label>
+        <button id="btnUseSame" class="btn">Usar LIMPIA como SUCIA</button>
+        <button id="btnEditSucia" class="btn">Editar SUCIA</button>
+        <span id="countSucia" class="badge">0 recortes</span>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <button id="btnUndo" class="btn">Deshacer último</button>
+        <button id="btnClear" class="btn danger">Limpiar TODO</button>
+        <!-- NUEVO: Botón Automático -->
+        <button id="btnAuto" class="btn" title="Detecta automáticamente manchas circulares en la imagen actual">Automático</button>
+        <span id="status" class="hint">Estado: esperando archivos…</span>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="view"></canvas>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="btnFinalizeLimpia" class="btn ok">SELECCION_LIMPIA_FINAL</button>
+        <span id="limpiaSummary" class="hint"></span>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnFinalizeSucia" class="btn ok">SELECCION_SUCIA_FINAL</button>
+        <span id="suciaSummary" class="hint"></span>
+      </div>
+
+      <div class="thumbs-wrap">
+        <div class="thumbs-card">
+          <h4>Selecciones LIMPIA</h4>
+          <div id="thumbsLimpia" class="thumbs"></div>
+        </div>
+        <div class="thumbs-card">
+          <h4>Selecciones SUCIA</h4>
+          <div id="thumbsSucia" class="thumbs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel derecho -->
+    <div class="card" id="rightCard" style="display:flex;flex-direction:column;overflow:hidden;min-width:0">
+      <div class="title">2) Resultados</div>
+
+      <div class="row" style="margin-bottom:10px">
+        <div class="radio-group" title="Forma de selección">
+          <span class="hint">Forma:</span>
+          <label><input type="radio" name="roiShape" value="circle" checked> Círculo</label>
+          <label><input type="radio" name="roiShape" value="rect"> Rectángulo (desde esquina inferior izquierda → derecha/arriba)</label>
+        </div>
+      </div>
+
+      <div class="row" style="margin-bottom:10px">
+        <select id="deVariant" class="btn" title="Variante ΔE">
+          <option value="de00">ΔE00 (CIEDE2000)</option>
+          <option value="de94">ΔE94 (kL=kC=kH=1)</option>
+          <option value="de76">ΔE76</option>
+        </select>
+        <button id="btnCompute" class="btn danger">CALCULAR ΔE</button>
+        <a id="btnCsv" class="btn ok" download="DeltaE.csv" style="pointer-events:none;opacity:.6">Descargar CSV</a>
+      </div>
+
+      <div class="results-wrap"><div id="results">Aún no hay resultados.</div></div>
+      <div id="chartBox" style="margin-top:10px"><canvas id="chart"></canvas></div>
+      <div id="chartBox2"><canvas id="chart2"></canvas></div>
+      <div class="title" style="margin-top:12px">CSV (vista previa)</div>
+      <pre id="csvOut">—</pre>
+    </div>
+  </div>
+
+  <div id="modal" class="modal" aria-hidden="true">
+    <img id="modalImg" alt="Vista ampliada" />
+  </div>
+  </div>
+
+<script>
+/* ===== Estado ===== */
+const state = {
+  limpia: {file:null,img:null,full:null,items:[],avgLab:null,final:false,thumbs:[],sig:null},
+  // IMPORTANTE: sucia.items y sucia.thumbs son ACUMULATIVOS entre cargas.
+  sucia:  {file:null,img:null,full:null,items:[],avgLabs:[],final:false,thumbs:[],sig:null,isClone:false},
+  current: 'none',
+  view: {scale:1,ox:0,oy:0,drawW:0,drawH:0},
+  draw: {active:false,ax:0,ay:0, mx:0,my:0},
+  shape: 'circle',
+};
+const els = {
+  view: document.getElementById('view'),
+  status: document.getElementById('status'),
+  fLimpia: document.getElementById('fLimpia'),
+  fSucia: document.getElementById('fSucia'),
+  btnUseSame: document.getElementById('btnUseSame'),
+  btnEditLimpia: document.getElementById('btnEditLimpia'),
+  btnEditSucia: document.getElementById('btnEditSucia'),
+  btnUndo: document.getElementById('btnUndo'),
+  btnClear: document.getElementById('btnClear'),
+  btnFinalizeLimpia: document.getElementById('btnFinalizeLimpia'),
+  btnFinalizeSucia: document.getElementById('btnFinalizeSucia'),
+  limpiaSummary: document.getElementById('limpiaSummary'),
+  suciaSummary: document.getElementById('suciaSummary'),
+  thumbsLimpia: document.getElementById('thumbsLimpia'),
+  thumbsSucia: document.getElementById('thumbsSucia'),
+  deVariant: document.getElementById('deVariant'),
+  btnCompute: document.getElementById('btnCompute'),
+  results: document.getElementById('results'),
+  csvOut: document.getElementById('csvOut'),
+  btnCsv: document.getElementById('btnCsv'),
+  chart: document.getElementById('chart'),
+  chart2: document.getElementById('chart2'),
+  chartBox: document.getElementById('chartBox'),
+  chartBox2: document.getElementById('chartBox2'),
+  modal: document.getElementById('modal'),
+  modalImg: document.getElementById('modalImg'),
+  countLimpia: document.getElementById('countLimpia'),
+  countSucia: document.getElementById('countSucia'),
+  btnAuto: document.getElementById('btnAuto'),
+};
+const ctx = els.view.getContext('2d');
+function logStatus(s){ els.status.textContent = "Estado: " + s; }
+function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
+/* ===== Selector de forma ===== */
+document.querySelectorAll('input[name="roiShape"]').forEach(r=>{
+  r.addEventListener('change', e=>{
+    state.shape = e.target.value;
+    drawView();
+  });
+});
+
+/* ===== Utilidades ===== */
+function fileToImage(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{ URL.revokeObjectURL(url); res(img); };
+    img.onerror=rej; img.src=url;
+  });
+}
+function makeFullCanvasFromImage(img){
+  const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+  const g=c.getContext('2d');
+  g.drawImage(img,0,0);
+  return c;
+}
+function fitImage(ctx,img,W,H){
+  const s=Math.min(W/img.width, H/img.height);
+  const dw=Math.round(img.width*s), dh=Math.round(img.height*s);
+  const ox=Math.floor((W-dw)/2), oy=Math.floor((H-dh)/2);
+  ctx.clearRect(0,0,W,H); ctx.drawImage(img,ox,oy,dw,dh);
+  return {scale:s,ox,oy,drawW:dw,drawH:dh};
+}
+function resizeCanvasToDisplaySize(c){
+  const dpr=Math.max(1,window.devicePixelRatio||1);
+  const cssW=c.clientWidth|0, cssH=c.clientHeight|0;
+  if(c.width!==cssW*dpr || c.height!==cssH*dpr){
+    c.width=cssW*dpr; c.height=cssH*dpr; c.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+  }
+  return {w:cssW,h:cssH};
+}
+
+/* ===== Firma estricta (hash de TODOS los píxeles) ===== */
+function signatureCanvasStrict(full){
+  const w=full.width, h=full.height, g=full.getContext('2d');
+  const data=g.getImageData(0,0,w,h).data;
+  let hash=0x811c9dc5>>>0; // FNV-1a 32-bit
+  for(let i=0;i<data.length;i++){
+    hash ^= data[i];
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash>>>0;
+}
+
+/* ===== Objeto actual y dibujo ===== */
+function currentObj(){
+  if(state.current==='limpia' || state.current==='sucia') return state[state.current];
+  if(state.sucia.img) { state.current='sucia'; return state.sucia; }
+  if(state.limpia.img){ state.current='limpia'; return state.limpia; }
+  return null;
+}
+
+function drawView(){
+  const obj=currentObj();
+  const {w,h}=resizeCanvasToDisplaySize(els.view);
+  ctx.fillStyle="#061020"; ctx.fillRect(0,0,w,h);
+  if(!obj || !obj.img){ ctx.fillStyle="#94a3b8"; ctx.fillText("Sube una imagen…",12,20); return; }
+  state.view=fitImage(ctx,obj.img,w,h);
+
+  ctx.lineWidth=2; ctx.setLineDash([6,5]);
+
+  // Dibuja solo los items de la imagen actual (para SUCIA, se filtra por firma).
+  const itemsToDraw = obj===state.sucia
+    ? obj.items.filter(it => it._sig === obj.sig)
+    : obj.items;
+
+  for(const it of itemsToDraw){
+    if(it.kind==='circle'){
+      ctx.strokeStyle= state.current==='limpia' ? "#22d3ee" : "#22c55e";
+      const cx = state.view.ox + it.circle.cx*state.view.scale;
+      const cy = state.view.oy + it.circle.cy*state.view.scale;
+      const r  = it.circle.r*state.view.scale;
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+    } else {
+      ctx.strokeStyle= state.current==='limpia' ? "#60a5fa" : "#34d399";
+      const cx = state.view.ox + it.rect.cx*state.view.scale;
+      const cy = state.view.oy + it.rect.cy*state.view.scale;
+      const hw = it.rect.hw*state.view.scale;
+      const hh = it.rect.hh*state.view.scale;
+      ctx.strokeRect(cx-hw, cy-hh, hw*2, hh*2);
+    }
+  }
+  ctx.setLineDash([]);
+
+  if(state.draw.active){
+    if(state.shape==='circle'){
+      const c = getCircleInView();
+      ctx.strokeStyle="#ef4444"; ctx.fillStyle="rgba(239,68,68,.12)";
+      ctx.beginPath(); ctx.arc(c.cx,c.cy,c.r,0,Math.PI*2); ctx.stroke(); ctx.fill();
+    } else {
+      const r = getRectInViewFromBL();
+      ctx.strokeStyle="#ef4444"; ctx.fillStyle="rgba(239,68,68,.12)";
+      ctx.strokeRect(r.left, r.top, r.width, r.height);
+      ctx.fillRect(r.left, r.top, r.width, r.height);
+    }
+  }
+
+  logStatus(`${state.current==='limpia'?'LIMPIA':'SUCIA'} lista para seleccionar (${state.shape}). Regla: mismo archivo subido ⇒ ΔE=0; clon ⇒ verificación estricta.`);
+}
+
+/* ===== Geometría ===== */
+function getCircleInView(){
+  const cx = clamp(state.draw.ax, state.view.ox, state.view.ox+state.view.drawW);
+  const cy = clamp(state.draw.ay, state.view.oy, state.view.oy+state.view.drawH);
+  const mx = clamp(state.draw.mx, state.view.ox, state.view.ox+state.view.drawW);
+  const my = clamp(state.draw.my, state.view.oy, state.view.oy+state.view.drawH);
+  let r = Math.hypot(mx - cx, my - cy);
+  const dxLeft   = cx - state.view.ox;
+  const dxRight  = (state.view.ox+state.view.drawW) - cx;
+  const dyTop    = cy - state.view.oy;
+  const dyBottom = (state.view.oy+state.view.drawH) - cy;
+  const maxR = Math.max(0, Math.min(dxLeft, dxRight, dyTop, dyBottom));
+  r = Math.min(r, maxR);
+  return {cx, cy, r};
+}
+
+/* Rectángulo desde esquina inferior izquierda */
+function getRectInViewFromBL(){
+  const ax = clamp(state.draw.ax, state.view.ox, state.view.ox + state.view.drawW);
+  const ay = clamp(state.draw.ay, state.view.oy, state.view.oy + state.view.drawH); // bottom
+  let mx = clamp(state.draw.mx, ax, state.view.ox + state.view.drawW); // derecha
+  let my = clamp(state.draw.my, state.view.oy, ay);                    // arriba (y menor)
+  if (my > ay) my = ay - 1;
+
+  const left = ax, right = mx, bottom = ay, top = my;
+  const width = Math.max(1, right - left);
+  const height = Math.max(1, bottom - top);
+  const cx = left + width/2, cy = top + height/2, hw = width/2, hh = height/2;
+  return {left, top, width, height, cx, cy, hw, hh};
+}
+
+/* ===== Transformación a imagen ===== */
+function viewCircleToImageCircle(c){
+  const cx = (c.cx - state.view.ox)/state.view.scale;
+  const cy = (c.cy - state.view.oy)/state.view.scale;
+  const r  = c.r/state.view.scale;
+  const obj=currentObj(); const W=obj.img.width, H=obj.img.height;
+  const rmax = Math.max(0, Math.min(cx, cy, W-cx, H-cy));
+  return { cx: clamp(Math.round(cx), 0, W-1),
+           cy: clamp(Math.round(cy), 0, H-1),
+           r:  Math.max(1, Math.floor(Math.min(r, rmax))) };
+}
+function viewRectToImageRect(r){
+  const cx = (r.cx - state.view.ox)/state.view.scale;
+  const cy = (r.cy - state.view.oy)/state.view.scale;
+  const hw = r.hw/state.view.scale;
+  const hh = r.hh/state.view.scale;
+  const obj=currentObj(); const W=obj.img.width, H=obj.img.height;
+  const hwMax = Math.min(cx, W-cx), hhMax = Math.min(cy, H-cy);
+  return { cx: clamp(Math.round(cx), 0, W-1),
+           cy: clamp(Math.round(cy), 0, H-1),
+           hw: Math.max(1, Math.floor(Math.min(hw, hwMax))),
+           hh: Math.max(1, Math.floor(Math.min(hh, hhMax))) };
+}
+
+/* ===== Recortes + thumbs ===== */
+function cropCircleFromFull(full, circ){
+  const size = circ.r*2;
+  const c=document.createElement('canvas'); c.width=size; c.height=size;
+  const g=c.getContext('2d');
+  g.save(); g.beginPath(); g.arc(circ.r, circ.r, circ.r, 0, Math.PI*2); g.closePath(); g.clip();
+  g.drawImage(full, circ.cx - circ.r, circ.cy - circ.r, size, size, 0, 0, size, size);
+  g.restore();
+  return c;
+}
+function cropRectFromFull(full, rect){
+  const c=document.createElement('canvas'); c.width=rect.hw*2; c.height=rect.hh*2;
+  const g=c.getContext('2d');
+  g.drawImage(full, rect.cx-rect.hw, rect.cy-rect.hh, rect.hw*2, rect.hh*2, 0,0, rect.hw*2, rect.hh*2);
+  return c;
+}
+
+/* ===== NUEVO: utilidades de thumbnails (borrar y re-render) ===== */
+function deleteThumb(owner, index0){
+  const obj = state[owner];
+  if(!obj) return;
+
+  // Eliminar item y vista previa
+  obj.items.splice(index0, 1);
+  obj.thumbs.splice(index0, 1);
+
+  // Reset de "finalizado" y resúmenes coherentes
+  if(owner === 'limpia'){
+    obj.final = false;
+    obj.avgLab = null;
+    els.limpiaSummary.textContent = '';
+  } else {
+    if(obj.final){
+      obj.avgLabs = obj.thumbs.map(c => avgLabCanvas(c));
+      els.suciaSummary.textContent = `SUCIA: ${obj.avgLabs.length} recortes listos.`;
+    }
+  }
+
+  updateCounts();
+  renderThumbs(owner);
+  drawView();
+}
+
+function renderThumbs(owner){
+  const obj = state[owner];
+  const container = owner === 'limpia' ? els.thumbsLimpia : els.thumbsSucia;
+  container.innerHTML = '';
+  obj.thumbs.forEach((cropCanvas, i) => {
+    const kind = obj.items[i]?.kind || 'circle';
+    addThumb(cropCanvas, owner, i+1, kind);
+  });
+}
+
+/* ===== NUEVO: addThumb (click = eliminar) ===== */
+function addThumb(canvasCrop, owner, indexLabel, kind){
+  const url = canvasCrop.toDataURL('image/png');
+  const container = owner === 'limpia' ? els.thumbsLimpia : els.thumbsSucia;
+
+  const div=document.createElement('div');
+  div.className='thumb';
+  div.setAttribute('data-owner', owner);
+  div.setAttribute('data-index', String(indexLabel-1)); // 0-based
+
+  const img=document.createElement('img'); img.src=url; img.alt='recorte';
+  const badge=document.createElement('div'); badge.className='idx'; badge.textContent=String(indexLabel);
+  const k=document.createElement('div'); k.className='kind'; k.textContent=kind==='circle'?'○':'▭';
+
+  div.appendChild(img);
+  div.appendChild(badge);
+  div.appendChild(k);
+  container.appendChild(div);
+
+  // Click en miniatura ⇒ eliminar selección correspondiente
+  div.addEventListener('click', ()=>{
+    const own = div.getAttribute('data-owner');
+    const idx = parseInt(div.getAttribute('data-index')||'0',10);
+    deleteThumb(own, idx);
+  });
+}
+
+/* (El modal queda disponible pero ya no se activa con click en miniatura) */
+els.modal.addEventListener('click', ()=>{ els.modal.classList.remove('open'); els.modal.setAttribute('aria-hidden','true'); });
+window.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ els.modal.click(); }});
+
+/* ===== Eventos de puntero ===== */
+els.view.addEventListener('pointerdown', (e)=>{
+  const obj=currentObj(); if(!obj || !obj.img) return;
+  const b=els.view.getBoundingClientRect(); const x=e.clientX-b.left, y=e.clientY-b.top;
+  if(x<state.view.ox || x>state.view.ox+state.view.drawW || y<state.view.oy || y>state.view.oy+state.view.drawH) return;
+  state.draw.active=true; state.draw.ax=x; state.draw.ay=y; state.draw.mx=x; state.draw.my=y;
+  els.view.setPointerCapture(e.pointerId); drawView();
+});
+els.view.addEventListener('pointermove', (e)=>{
+  if(!state.draw.active) return;
+  const b=els.view.getBoundingClientRect(); const x=e.clientX-b.left, y=e.clientY-b.top;
+  state.draw.mx = x; state.draw.my = y; drawView();
+});
+els.view.addEventListener('pointerup', (e)=>{
+  if(!state.draw.active) return;
+  state.draw.active=false; els.view.releasePointerCapture(e.pointerId);
+
+  const obj=currentObj(); if(!obj) return;
+
+  if(state.shape==='circle'){
+    const cV=getCircleInView(); if(cV.r<2){ drawView(); return; }
+    const cI=viewCircleToImageCircle(cV);
+
+    const item = {kind:'circle', circle:cI};
+    // Etiquetar items SUCIA con metadatos de la imagen fuente
+    if(state.current==='sucia'){
+      item._sig = state.sucia.sig;
+      item._fname = state.sucia.file?.name || '';
+      item._fsize = state.sucia.file?.size || 0;
+      item._flm = state.sucia.file?.lastModified || 0;
+      item._isClone = !!state.sucia.isClone;
+    }
+
+    obj.items.push(item);
+    const crop = cropCircleFromFull(obj.full, cI);
+    obj.thumbs.push(crop);
+    const idx = obj.items.length;
+    if(state.current==='limpia'){ addThumb(crop, 'limpia', idx, 'circle'); }
+    else { addThumb(crop, 'sucia', idx, 'circle'); }
+  } else {
+    const rV=getRectInViewFromBL();
+    if(rV.width<1 || rV.height<1){ drawView(); return; }
+    const rI=viewRectToImageRect(rV);
+
+    const item = {kind:'rect', rect:rI};
+    if(state.current==='sucia'){
+      item._sig = state.sucia.sig;
+      item._fname = state.sucia.file?.name || '';
+      item._fsize = state.sucia.file?.size || 0;
+      item._flm = state.sucia.file?.lastModified || 0;
+      item._isClone = !!state.sucia.isClone;
+    }
+
+    obj.items.push(item);
+    const crop = cropRectFromFull(obj.full, rI);
+    obj.thumbs.push(crop);
+    const idx = obj.items.length;
+    if(state.current==='limpia'){ addThumb(crop, 'limpia', idx, 'rect'); }
+    else { addThumb(crop, 'sucia', idx, 'rect'); }
+  }
+
+  updateCounts(); drawView();
+});
+window.addEventListener('keydown', e=>{ if(e.key==='Escape' && state.draw.active){ state.draw.active=false; drawView(); }});
+
+/* ===== Carga ===== */
+els.fLimpia.addEventListener('change', async (e)=>{
+  const f=e.target.files[0]; if(!f) return;
+  const img=await fileToImage(f);
+  const full=makeFullCanvasFromImage(img);
+  state.limpia={file:f,img,full,items:[],avgLab:null,final:false,thumbs:[],sig:signatureCanvasStrict(full)};
+  els.thumbsLimpia.innerHTML=''; updateCounts();
+  state.current='limpia'; drawView();
+  logStatus("LIMPIA cargada. Puedes empezar a seleccionar.");
+});
+
+els.fSucia.addEventListener('change', async (e)=>{
+  const f=e.target.files[0]; if(!f) return;
+  const img=await fileToImage(f);
+  const full=makeFullCanvasFromImage(img);
+
+  // NO reiniciamos items ni thumbs para que se ACUMULEN entre cargas.
+  state.sucia.file = f;
+  state.sucia.img = img;
+  state.sucia.full = full;
+  state.sucia.sig = signatureCanvasStrict(full);
+  state.sucia.isClone = false;
+  // mantenemos: state.sucia.items, state.sucia.thumbs, state.sucia.avgLabs
+
+  updateCounts();
+  state.current='sucia'; drawView();
+  logStatus("SUCIA cargada (acumulando selecciones entre imágenes).");
+});
+
+// Clonar LIMPIA → SUCIA (también acumulativo)
+els.btnUseSame.addEventListener('click', async ()=>{
+  if(!state.limpia.img){ alert("Primero sube la imagen LIMPIA."); return; }
+  const img = state.limpia.img;
+  const full = makeFullCanvasFromImage(img);
+  state.sucia.file = state.limpia.file;
+  state.sucia.img = img;
+  state.sucia.full = full;
+  state.sucia.sig = signatureCanvasStrict(full);
+  state.sucia.isClone = true;
+  // conservamos selecciones previas
+  updateCounts();
+  state.current='sucia'; drawView();
+  logStatus("SUCIA clonada desde LIMPIA (acumulando selecciones). ΔE=0 solo si ROI coincide exactamente.");
+});
+
+/* ===== Botones ===== */
+function clearLimpiaSelections(){
+  state.limpia.items = [];
+  state.limpia.thumbs = [];
+  state.limpia.final = false;
+  state.limpia.avgLab = null;
+  els.thumbsLimpia.innerHTML = '';
+  els.limpiaSummary.textContent = '';
+  updateCounts();
+  renderThumbs('limpia');
+}
+function clearSuciaSelections(){
+  state.sucia.items = [];
+  state.sucia.thumbs = [];
+  state.sucia.final = false;
+  state.sucia.avgLabs = [];
+  els.thumbsSucia.innerHTML = '';
+  els.suciaSummary.textContent = '';
+  updateCounts();
+  renderThumbs('sucia');
+}
+els.btnEditLimpia.addEventListener('click', ()=>{
+  if(!state.limpia.img){ els.fLimpia.click(); return; }
+  clearLimpiaSelections();
+  state.current='limpia';
+  drawView();
+  logStatus("Editando LIMPIA: selecciones borradas. Vuelve a seleccionar y finaliza.");
+});
+els.btnEditSucia.addEventListener('click', ()=>{
+  if(!state.sucia.img){ els.fSucia.click(); return; }
+  clearSuciaSelections();
+  state.current='sucia';
+  drawView();
+  logStatus("Editando SUCIA: selecciones borradas. Vuelve a seleccionar y finaliza.");
+});
+els.btnUndo.addEventListener('click', ()=>{
+  const obj=currentObj(); if(!obj) return;
+  if(obj.items.length){
+    obj.items.pop(); obj.thumbs.pop();
+    renderThumbs(state.current === 'limpia' ? 'limpia' : 'sucia');
+    updateCounts(); drawView();
+  }
+});
+els.btnClear.addEventListener('click', resetAll);
+function resetAll(){
+  state.limpia={file:null,img:null,full:null,items:[],avgLab:null,final:false,thumbs:[],sig:null};
+  state.sucia ={file:null,img:null,full:null,items:[],avgLabs:[],final:false,thumbs:[],sig:null,isClone:false};
+  state.current='none'; state.view={scale:1,ox:0,oy:0,drawW:0,drawH:0}; state.draw={active:false,ax:0,ay:0,mx:0,my:0};
+  els.fLimpia.value=""; els.fSucia.value="";
+  els.limpiaSummary.textContent=""; els.suciaSummary.textContent="";
+  els.results.innerHTML="Aún no hay resultados.";
+  els.csvOut.textContent="—";
+  els.btnCsv.href=""; els.btnCsv.style.pointerEvents="none"; els.btnCsv.style.opacity=".6";
+  els.thumbsLimpia.innerHTML=''; els.thumbsSucia.innerHTML='';
+  if(chart){ chart.destroy(); chart=null; }
+  if(chart2){ chart2.destroy(); chart2=null; }
+  updateCounts(); drawView(); logStatus("esperando archivos…");
+}
+function updateCounts(){
+  document.getElementById('countLimpia').textContent = (state.limpia.items?.length||0) + " recortes";
+  document.getElementById('countSucia').textContent  = (state.sucia.items?.length||0) + " recortes";
+}
+
+/* ===== NUEVO: Detección automática de manchas circulares de COLOR (usa C*ab) ===== */
+function autoDetectCirclesOnCurrent(){
+  const obj = currentObj();
+  if(!obj || !obj.full){
+    alert("Sube una imagen y asegúrate de estar editando LIMPIA o SUCIA.");
+    return;
+  }
+  const full = obj.full;
+  const w = full.width, h = full.height;
+  const g = full.getContext('2d');
+  const id = g.getImageData(0,0,w,h);
+  const d = id.data;
+
+  // 1) Croma C*ab por píxel en Lab
+  const chroma = new Float32Array(w*h);
+  let sumC=0, sumC2=0;
+  for(let i=0, p=0; i<d.length; i+=4, p++){
+    const LAb = rgbToLab(d[i], d[i+1], d[i+2]);
+    const C   = Math.hypot(LAb[1], LAb[2]);
+    chroma[p] = C; sumC += C; sumC2 += C*C;
+  }
+  const n = w*h, meanC = sumC/n;
+  const stdC  = Math.sqrt(Math.max(0, sumC2/n - meanC*meanC));
+
+  // 2) Umbral adaptativo
+  const tChroma = Math.max(10, meanC + 0.35*stdC);
+
+  const mask = new Uint8Array(w*h);
+  for(let p=0;p<n;p++){ mask[p] = chroma[p] > tChroma ? 1 : 0; }
+
+  // 3) Componentes conectados (4-conectividad)
+  const visited = new Uint8Array(w*h);
+  const dx = [1,-1,0,0], dy = [0,0,1,-1];
+  const inb = (x,y)=> (x>=0 && x<w && y>=0 && y<h);
+
+  let found=0;
+  const maxComponents = 400;
+
+  for(let y=0; y<h; y++){
+    for(let x=0; x<w; x++){
+      const idx0 = y*w + x;
+      if(!mask[idx0] || visited[idx0]) continue;
+
+      // BFS
+      const qx=[x], qy=[y];
+      visited[idx0]=1;
+
+      let area=0, sx=0, sy=0;
+      let minx=x, maxx=x, miny=y, maxy=y;
+      const boundary=[];
+
+      while(qx.length){
+        const cx = qx.pop(), cy = qy.pop();
+        const ii = cy*w + cx;
+        area++; sx+=cx; sy+=cy;
+        if(cx<minx) minx=cx; if(cx>maxx) maxx=cx;
+        if(cy<miny) miny=cy; if(cy>maxy) maxy=cy;
+
+        let isBoundary=false;
+        for(let k=0;k<4;k++){
+          const nx_ = cx + dx[k], ny_ = cy + dy[k];
+          if(!inb(nx_,ny_) || !mask[ny_*w + nx_]){ isBoundary=true; }
+        }
+        if(isBoundary) boundary.push([cx,cy]);
+
+        for(let k=0;k<4;k++){
+          const nx_ = cx + dx[k], ny_ = cy + dy[k];
+          if(!inb(nx_,ny_)) continue;
+          const jj = ny_*w + nx_;
+          if(mask[jj] && !visited[jj]){ visited[jj]=1; qx.push(nx_); qy.push(ny_); }
+        }
+      }
+
+      if(area < 40) continue;
+      const ww = (maxx - minx + 1), hh = (maxy - miny + 1);
+      if(ww<6 || hh<6) continue;
+      if(boundary.length<12) continue;
+
+      const cx = sx/area, cy = sy/area;
+
+      let step = Math.max(1, Math.floor(boundary.length/200));
+      let rsum=0;
+      const rs=[];
+      for(let i=0;i<boundary.length;i+=step){
+        const bx=boundary[i][0], by=boundary[i][1];
+        const rr = Math.hypot(bx - cx, by - cy);
+        rs.push(rr); rsum+=rr;
+      }
+      const rmean = rsum/rs.length;
+      let rvar=0;
+      for(const rr of rs){ const dv=rr-rmean; rvar+=dv*dv; }
+      const rstd = Math.sqrt(rvar/rs.length);
+      const circularity = rstd / (rmean || 1);
+      const aspect = ww>hh ? ww/hh : hh/ww;
+
+      if(rmean < 6) continue;
+      if(rmean > Math.min(w,h)*0.30) continue;
+      if(circularity > 0.32) continue;
+      if(aspect > 1.7) continue;
+      if(cx - rmean < 1 || cy - rmean < 1 || cx + rmean >= w-1 || cy + rmean >= h-1) continue;
+
+      const circI = { cx: Math.round(cx), cy: Math.round(cy), r: Math.max(1, Math.floor(rmean)) };
+
+      // Etiquetado por imagen SUCIA actual
+      const item = {kind:'circle', circle:circI};
+      if(state.current==='sucia'){
+        item._sig = state.sucia.sig;
+        item._fname = state.sucia.file?.name || '';
+        item._fsize = state.sucia.file?.size || 0;
+        item._flm = state.sucia.file?.lastModified || 0;
+        item._isClone = !!state.sucia.isClone;
+      }
+
+      obj.items.push(item);
+      const crop = cropCircleFromFull(obj.full, circI);
+      obj.thumbs.push(crop);
+      found++;
+      if(found >= maxComponents) break;
+    }
+    if(found >= maxComponents) break;
+  }
+
+  if(found){
+    // Re-pinta y re-indexa todas las miniaturas del owner actual
+    renderThumbs(state.current);
+  }
+
+  updateCounts();
+  drawView();
+  logStatus(found ? `Detectadas ${found} manchas circulares de COLOR (modo automático).`
+                  : "No se detectaron manchas circulares de color con los criterios actuales.");
+}
+els.btnAuto.addEventListener('click', autoDetectCirclesOnCurrent);
+
+/* ===== Colorimetría & ΔE ===== */
+function srgbToLinear(c){ c/=255; return (c<=0.04045)? c/12.92 : Math.pow((c+0.055)/1.055,2.4); }
+function rgbLinearToXyz(r,g,b){
+  const X=r*0.4124564 + g*0.3575761 + b*0.1804375;
+  const Y=r*0.2126729 + g*0.7151522 + b*0.0721750;
+  const Z=r*0.0193339 + g*0.1191920 + b*0.9503041;
+  return [X,Y,Z];
+}
+function xyzToLab(X,Y,Z){
+  const Xn=0.95047, Yn=1.0, Zn=1.08883;
+  const e=216/24389, k=24389/27;
+  let x=X/Xn, y=Y/Yn, z=Z/Zn;
+  const f=t=>(t>e)? Math.cbrt(t) : (k*t+16)/116;
+  const fx=f(x), fy=f(y), fz=f(z);
+  return [116*fy-16, 500*(fx-fy), 200*(fy-fz)];
+}
+function rgbToLab(R,G,B){
+  const r=srgbToLinear(R), g=srgbToLinear(G), b=srgbToLinear(B);
+  const [X,Y,Z]=rgbLinearToXyz(r,g,b);
+  return xyzToLab(X,Y,Z);
+}
+function deltaE76(l1,l2){
+  const dL=l2[0]-l1[0], da=l2[1]-l1[1], db=l2[2]-l1[2];
+  return Math.sqrt(dL*dL + da*da + db*db);
+}
+function deltaE94(l1,l2){
+  const [L1,a1,b1]=l1, [L2,a2,b2]=l2;
+  const kL=1,kC=1,kH=1, K1=0.045,K2=0.015;
+  const C1=Math.hypot(a1,b1), C2=Math.hypot(a2,b2);
+  const dL=L2-L1, dC=C2-C1;
+  const da=a2-a1; const db=b2-b1;
+  const dH2 = da*da + db*db - dC*dC;
+  const dH = dH2>0 ? Math.sqrt(dH2) : 0;
+  const S_L=1;
+  const S_C=1 + K1*C1;
+  const S_H=1 + K2*C1;
+  return Math.sqrt( (dL/(kL*S_L))**2 + (dC/(kC*S_C))**2 + (dH/(kH*S_H))**2 );
+}
+function deltaE00(l1,l2){
+  const [L1,a1,b1]=l1, [L2,a2,b2]=l2;
+  const avgL=(L1+L2)/2, C1=Math.hypot(a1,b1), C2=Math.hypot(a2,b2), avgC=(C1+C2)/2;
+  const G=0.5*(1-Math.sqrt(Math.pow(avgC,7)/(Math.pow(avgC,7)+Math.pow(25,7))));
+  const a1p=(1+G)*a1, a2p=(1+G)*a2, C1p=Math.hypot(a1p,b1), C2p=Math.hypot(a2p,b2), avgCp=(C1p+C2p)/2;
+  const h1p=(Math.atan2(b1,a1p)*180/Math.PI + 360)%360, h2p=(Math.atan2(b2,a2p)*180/Math.PI + 360)%360;
+  const dLp=L2-L1, dCp=C2p-C1p;
+  let dhp; const dh=h2p-h1p;
+  if(C1p*C2p===0) dhp=0; else if(Math.abs(dh)<=180) dhp=dh; else dhp=(dh>180?dh-360:dh+360);
+  const dHp=2*Math.sqrt(C1p*C2p)*Math.sin((dhp*Math.PI/180)/2);
+  const avgHp=(()=>{ if(C1p&C2p===0) return h1p+h2p; if(Math.abs(h1p-h2p)<=180) return (h1p+h2p)/2; return (h1p+h2p+360)/2; })();
+  const T=1 - 0.17*Math.cos((avgHp-30)*Math.PI/180) + 0.24*Math.cos((2*avgHp)*Math.PI/180)
+           + 0.32*Math.cos((3*avgHp+6)*Math.PI/180) - 0.20*Math.cos((4*avgHp-63)*Math.PI/180);
+  const dRo=30*Math.exp(-Math.pow((avgHp-275)/25,2));
+  const Rc=2*Math.sqrt(Math.pow(avgCp,7)/(Math.pow(avgCp,7)+Math.pow(25,7)));
+  const Sl=1 + ((0.015*Math.pow(avgL-50,2))/Math.sqrt(20+Math.pow(avgL-50,2)));
+  const Sc=1 + 0.045*avgCp;
+  const Sh=1 + 0.015*avgCp*T;
+  const Rt=-Math.sin(2*dRo*Math.PI/180)*Rc;
+  return Math.sqrt(Math.pow(dLp/Sl,2)+Math.pow(dCp/Sc,2)+Math.pow(dHp/Sh,2)+Rt*(dCp/Sc)*(dHp/Sh));
+}
+
+/* ===== Promedios LAB ===== */
+function avgLabCanvas(c){
+  const g=c.getContext('2d'); const d=g.getImageData(0,0,c.width,c.height).data;
+  let sL=0, sa=0, sb=0, n=0;
+  for(let i=0;i<d.length;i+=4){
+    const a = d[i+3];
+    if(a===0) continue;
+    const lab=rgbToLab(d[i],d[i+1],d[i+2]);
+    sL+=lab[0]; sa+=lab[1]; sb+=lab[2]; n++;
+  }
+  return n? {L:+(sL/n).toFixed(6), a:+(sa/n).toFixed(6), b:+(sb/n).toFixed(6)} : {L:0,a:0,b:0};
+}
+function avgLabAcrossCrops(crops){
+  let sL=0, sa=0, sb=0, n=0;
+  for(const c of crops){
+    const g=c.getContext('2d'); const d=g.getImageData(0,0,c.width,c.height).data;
+    for(let i=0;i<d.length;i+=4){
+      const a = d[i+3];
+      if(a===0) continue;
+      const lab=rgbToLab(d[i],d[i+1],d[i+2]);
+      sL+=lab[0]; sa+=lab[1]; sb+=lab[2]; n++;
+    }
+  }
+  return n? {L:+(sL/n).toFixed(6), a:+(sa/n).toFixed(6), b:+(sb/n).toFixed(6)} : {L:0,a:0,b:0};
+}
+
+/* ===== Finalizar ===== */
+els.btnFinalizeLimpia.addEventListener('click', ()=>{
+  if(!state.limpia.full || !state.limpia.items.length){ alert("Selecciona al menos 1 recorte en LIMPIA."); return; }
+  state.limpia.final = true;
+  state.limpia.avgLab = avgLabAcrossCrops(state.limpia.thumbs);
+  els.limpiaSummary.textContent = `Promedio LIMPIA → L*=${state.limpia.avgLab.L.toFixed(3)}, a*=${state.limpia.avgLab.a.toFixed(3)}, b*=${state.limpia.avgLab.b.toFixed(3)}.`;
+  logStatus("LIMPIA finalizada.");
+});
+els.btnFinalizeSucia.addEventListener('click', ()=>{
+  if(!state.sucia.thumbs.length){ alert("Selecciona al menos 1 recorte en SUCIA."); return; }
+  state.sucia.final = true;
+  state.sucia.avgLabs = state.sucia.thumbs.map(c => avgLabCanvas(c)); // incluye todas las imágenes sucias acumuladas
+  els.suciaSummary.textContent = `SUCIA: ${state.sucia.avgLabs.length} recortes listos.`;
+  logStatus("SUCIA finalizada.");
+});
+
+/* ===== Cómputo ΔE (per-item, compatible con múltiples imágenes SUCIA) ===== */
+let chart = null;
+let chart2 = null;
+els.btnCompute.addEventListener('click', ()=>{
+  if(!state.limpia.final || !state.sucia.final){
+    alert("Finaliza ambas selecciones (limpia y sucia) antes de calcular."); return;
+  }
+
+  const formula = els.deVariant.value;
+
+  function hasMatchingROIInLimpia(it){
+    return state.limpia.items.some(m=>{
+      if(m.kind !== it.kind) return false;
+      if(it.kind==='circle'){
+        const a=m.circle, b=it.circle;
+        return a.cx===b.cx && a.cy===b.cy && a.r===b.r;
+      }else{
+        const a=m.rect, b=it.rect;
+        return a.cx===b.cx && a.cy===b.cy && a.hw===b.hw && a.hh===b.hh;
+      }
+    });
+  }
+
+  const rows = state.sucia.items.map((it,i)=>{
+    let refLab = state.limpia.avgLab;
+    const tarLab = state.sucia.avgLabs[i]; // alineado con el orden de thumbs/items
+
+    // Reglas especiales por ITEM (no por imagen actual):
+    const sameFileThisItem =
+      !!(state.limpia.file &&
+         it._fname===state.limpia.file.name &&
+         it._fsize===state.limpia.file.size &&
+         it._flm===state.limpia.file.lastModified &&
+         !it._isClone);
+
+    const identicalFullThisItem = (it._sig != null) && (it._sig === state.limpia.sig);
+
+    if(sameFileThisItem){
+      if(identicalFullThisItem && hasMatchingROIInLimpia(it)){
+        const refCrop = it.kind==='circle'
+          ? cropCircleFromFull(state.limpia.full, it.circle)
+          : cropRectFromFull (state.limpia.full, it.rect);
+        refLab = avgLabCanvas(refCrop);
+      }
+      return {
+        idx: i+1, de: 0.0,
+        Lref: refLab.L, aref: refLab.a, bref: refLab.b,
+        Ltar: tarLab.L, atar: tarLab.a, btar: tarLab.b,
+        dL: tarLab.L-refLab.L, da: tarLab.a-refLab.a, db: tarLab.b-refLab.b
+      };
+    }
+
+    // Caso "clon" por item
+    if(it._isClone && identicalFullThisItem && hasMatchingROIInLimpia(it)){
+      const refCrop = it.kind==='circle'
+        ? cropCircleFromFull(state.limpia.full, it.circle)
+        : cropRectFromFull (state.limpia.full, it.rect);
+      refLab = avgLabCanvas(refCrop);
+      return {
+        idx: i+1, de: 0.0,
+        Lref: refLab.L, aref: refLab.a, bref: refLab.b,
+        Ltar: tarLab.L, atar: tarLab.a, btar: tarLab.b,
+        dL: tarLab.L-refLab.L, da: tarLab.a-refLab.a, db: tarLab.b-refLab.b
+      };
+    }
+
+    const ref = [refLab.L, refLab.a, refLab.b];
+    const tar = [tarLab.L, tarLab.a, tarLab.b];
+    let de=0;
+    if(formula==='de00')      de = deltaE00(ref, tar);
+    else if(formula==='de94') de = deltaE94(ref, tar);
+    else                      de = deltaE76(ref, tar);
+
+    return {
+      idx: i+1, de,
+      Lref: refLab.L, aref: refLab.a, bref: refLab.b,
+      Ltar: tarLab.L, atar: tarLab.a, btar: tarLab.b,
+      dL: tarLab.L-refLab.L, da: tarLab.a-refLab.a, db: tarLab.b-refLab.b
+    };
+  });
+
+  renderResults(rows, formula);
+});
+
+function renderResults(rows, formula){
+  const vtxt = {de00:'ΔE00', de94:'ΔE94', de76:'ΔE76'}[formula] || 'ΔE';
+  if(!rows.length){
+    els.results.innerHTML="Aún no hay resultados.";
+    els.csvOut.textContent="—";
+    if(chart){ chart.destroy(); chart=null; }
+    if(chart2){ chart2.destroy(); chart2=null; }
+    els.btnCsv.href=""; els.btnCsv.style.pointerEvents="none"; els.btnCsv.style.opacity=".6";
+    return;
+  }
+
+  const html=['<table><thead><tr><th>#</th><th>Fórmula</th><th>ΔE</th><th>Detalles</th></tr></thead><tbody>'];
+  rows.forEach(r=>{
+    html.push(`<tr>
+      <td>${r.idx}</td>
+      <td>${vtxt}</td>
+      <td>${r.de.toFixed(6)}</td>
+      <td>
+        <details>
+          <summary>Ver L*, a*, b* (promedios)</summary>
+          <div>LIMPIA → L*: ${r.Lref.toFixed(3)}, a*: ${r.aref.toFixed(3)}, b*: ${r.bref.toFixed(3)}</div>
+          <div>SUCIA  → L*: ${r.Ltar.toFixed(3)}, a*: ${r.atar.toFixed(3)}, b*: ${r.btar.toFixed(3)}</div>
+          <div>ΔL*: ${r.dL.toFixed(3)}, Δa*: ${r.da.toFixed(3)}, Δb*: ${r.db.toFixed(3)}</div>
+        </details>
+      </td>
+    </tr>`);
+  });
+  html.push('</tbody></table>');
+  els.results.innerHTML=html.join('');
+
+  const csvHeader = 'Idx,Formula,DeltaE,L_ref,a_ref,b_ref,L_tar,a_tar,b_tar,DeltaL,Deltaa,Deltab';
+  const csvRows = rows.map(r=>[
+    r.idx, vtxt, r.de.toFixed(6),
+    r.Lref.toFixed(6), r.aref.toFixed(6), r.bref.toFixed(6),
+    r.Ltar.toFixed(6), r.atar.toFixed(6), r.btar.toFixed(6),
+    r.dL.toFixed(6), r.da.toFixed(6), r.db.toFixed(6)
+  ].join(','));
+  const csv = [csvHeader].concat(csvRows).join('\n');
+  els.csvOut.textContent = csv;
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  els.btnCsv.href=url; els.btnCsv.style.pointerEvents='auto'; els.btnCsv.style.opacity='1';
+
+  const labels = rows.map(r=>'Recorte '+r.idx);
+  const data = rows.map(r=>+r.de.toFixed(6));
+  const data2 = rows.map(r=>+(100 - r.de).toFixed(6)); // 100 − ΔE
+
+  if(chart){ chart.destroy(); }
+  if(chart2){ chart2.destroy(); }
+
+  chart = new Chart(els.chart.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: vtxt, data }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+  });
+
+  chart2 = new Chart(els.chart2.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: `100 − ${vtxt}`, data: data2 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+/* ===== Inicial ===== */
+function drawInit(){ const {w,h}=resizeCanvasToDisplaySize(els.view); ctx.fillStyle="#061020"; ctx.fillRect(0,0,w,h); }
+drawInit();
+window.addEventListener('resize', drawView);
+</script>
+</body>
+</html>
